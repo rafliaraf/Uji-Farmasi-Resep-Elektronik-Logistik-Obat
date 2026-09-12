@@ -1,102 +1,75 @@
-# Pengujian API Modul Farmasi & Mutasi Stok E-Resep Puskesmas
+# Pengujian API Modul Farmasi & Mutasi Stok Puskesmas
 
-Repository ini memuat artefak dan kode pengujian endpoint penerimaan e-resep, telaah klinis & administratif apoteker, penyiapan obat (*dispensing*), serta pemotongan otomatis stok inventori farmasi Puskesmas secara real-time dan bebas dari *race condition*.
+Repo ini isinya hasil pengerjaan tugas pengujian endpoint penerimaan e-resep, telaah klinis apoteker, penyiapan obat (dispensing), dan pemotongan otomatis stok inventori di instalasi farmasi Puskesmas secara real-time dan bebas dari race condition.
 
-- **Nama Mahasiswa**: Muhammad Rafli Aolia
-- **Tugas**: Pengujian Alur E-Resep & Sinkronisasi Mutasi Stok Inventori Puskesmas
-- **Hasil**: 10 dari 10 Skenario Pengujian Lulus (**100% Passed**)
-
----
-
-## 🎯 Tujuan Penugasan
-Memverifikasi alur peresepan obat elektronik (e-resep) dari ruang periksa dokter hingga penyerahan obat di instalasi farmasi Puskesmas secara real-time, akurat, dan terproteksi dari:
-1. Kesalahan peresepan obat alergi.
-2. Penyerahan obat tanpa telaah keabsahan apoteker.
-3. Mutasi stok minus (*Negative Stock Protection*).
-4. Pemotongan stok ganda akibat *Race Condition* / *Concurrency*.
+- **Nama**: Muhammad Rafli Aolia
+- **Tugas**: Verifikasi alur peresepan obat elektronik dan sinkronisasi mutasi stok Puskesmas
+- **Hasil**: Semua skenario pengujian lulus (100% Passed)
 
 ---
 
-## 🔬 Lingkup & Hasil Pengujian
+### Apa Aja yang Diuji?
 
-| No | Modul / Fitur | Endpoint & Method | Skenario Pengujian | Hasil Pengujian | Status |
-|:--:|---|---|---|---|:---:|
-| 1 | Health Check | `GET /api/v1/farmasi/health` | Verifikasi ketersediaan service API farmasi | Respons 200 OK & Status UP | **PASS** |
-| 2 | Penerimaan Resep | `GET /api/v1/farmasi/resep?status=menunggu` | Menarik antrian e-resep masuk dari ruang periksa | 200 OK, daftar resep tersaji | **PASS** |
-| 3 | Skrining Alergi | `POST /api/v1/farmasi/resep/{id}/telaah` | Cegah telaah jika resep memuat alergen pasien | 422 Kontraindikasi Alergi | **PASS** |
-| 4 | Telaah Apoteker | `POST /api/v1/farmasi/resep/{id}/telaah` | Verifikasi administratif, farmasetis, & klinis | 200 OK & status `siap_dispense` | **PASS** |
-| 5 | Proteksi Alur | `POST /api/v1/farmasi/resep/{id}/dispense` | Cegah dispensing jika belum ditelaah apoteker | 422 Unverified Prescription | **PASS** |
-| 6 | Dispensing Stok | `POST /api/v1/farmasi/resep/{id}/dispense` | Eksekusi dispense & potong stok otomatis | 200 OK, stok terpotong akurat | **PASS** |
-| 7 | Kartu Stok Log | `GET /api/v1/farmasi/obat/{id}/kartu-stok` | Audit trail mutasi masuk & keluar inventori | 200 OK, log referensi e-resep tercatat | **PASS** |
-| 8 | Negative Stock | `POST /api/v1/farmasi/resep/{id}/dispense` | Cegah dispense bila kuantitas melebihi sisa stok | 422 Negative Stock Protection & auto-rollback | **PASS** |
-| 9 | Idempotensi | `POST /api/v1/farmasi/resep/{id}/dispense` | Cegah dispense ulang resep yang sudah selesai | 409 Conflict (Double Dispense Prevented) | **PASS** |
-| 10 | Race Condition | `POST /api/v1/farmasi/resep/{id}/dispense` | 5 Thread serentak mendispense sisa stok tipis | Thread lock aktif, 2 sukses, 3 ditolak, sisa stok tepat 2 (tidak minus) | **PASS** |
+1. **Penerimaan Resep Masuk dari Ruang Periksa**
+   - Uji endpoint `GET /resep?status=menunggu` untuk menarik daftar resep elektronik yang dikirim oleh dokter poli.
+   - Resep memuat identitas pasien, usia, poli asal, dokter penulis, serta rincian obat dan aturan pakai (signa).
+
+2. **Telaah & Verifikasi Resep Apoteker**
+   - Uji `POST /resep/{id}/telaah` untuk verifikasi administratif, farmasetis, dan klinis.
+   - Pengecekan riwayat alergi obat pasien otomatis: sistem langsung menolak resep jika dokter meresepkan obat yang alergi bagi pasien (**422 Unprocessable Entity**).
+
+3. **Dispensing & Pemotongan Stok Otomatis**
+   - Uji eksekusi `POST /resep/{id}/dispense` untuk penyiapan obat dan pemotongan kuantitas stok di tabel inventori secara real-time.
+   - Seluruh mutasi pengeluaran obat otomatis tercatat ke kartu stok obat (`GET /obat/{id}/kartu-stok`).
+
+4. **Proteksi Stok Kosong (Negative Stock Protection)**
+   - Pengujian dispensing saat kuantitas obat yang diminta melebihi sisa stok fisik di inventori (contoh: permintaan 20 sachet Oralit saat stok hanya ada 5).
+   - Sistem menolak transaksi (**422 Unprocessable Entity**), auto-rollback, dan menjamin stok tidak pernah minus.
+
+5. **Proteksi Concurrency & Race Condition**
+   - Pengujian multi-thread (5 request serentak) saat stok obat menipis (10 tablet Salbutamol).
+   - Menggunakan mekanisme thread lock transaksional sehingga kuantitas stok tetap akurat, tidak over-dispense, dan tidak terjadi race condition.
 
 ---
 
-## 📊 Bukti Pengujian Mutasi Stok (Sebelum vs Sesudah Dispensing)
+### Ringkasan Test Case
 
-Berikut adalah rekam data pemotongan kuantitas stok inventori pada saat resep `RSP-20260912-001` (Pasien Budi Santoso) dieksekusi:
+| No | Modul | Skenario Pengujian | Expected | Hasil |
+|:--:|---|---|:---:|:---:|
+| 1 | Service | Health check service Farmasi | 200 OK | **PASS** |
+| 2 | Resep | Tarik daftar e-resep masuk (status=menunggu) | 200 OK & data resep muncul | **PASS** |
+| 3 | Telaah | Deteksi kontraindikasi alergi obat pasien | 422 Unprocessable Entity | **PASS** |
+| 4 | Telaah | Telaah administratif, farmasetis, & klinis apoteker | 200 OK & status siap_dispense | **PASS** |
+| 5 | Proteksi | Cegah dispensing resep yang belum ditelaah | 422 Unprocessable Entity | **PASS** |
+| 6 | Dispensing | Eksekusi dispense & pemotongan stok otomatis | 200 OK & stok berkurang akurat | **PASS** |
+| 7 | Kartu Stok | Cek catatan audit trail mutasi keluar di kartu stok | 200 OK & data mutasi valid | **PASS** |
+| 8 | Negative Stock | Proteksi stok kosong / defisit (mencegah stok minus) | 422 Unprocessable Entity & stok aman | **PASS** |
+| 9 | Idempotensi | Tolak dispense ulang pada resep yang sudah selesai | 409 Conflict | **PASS** |
+| 10 | Concurrency | Uji multi-thread serentak (Race condition safety) | 2 sukses, 3 ditolak, sisa stok pas 2 | **PASS** |
 
-### 1. Kondisi Stok Sebelum Resep Didispense
+---
+
+### Bukti Mutasi Stok (Sebelum vs Sesudah Dispensing)
+
+Pengujian pada resep `RSP-20260912-001` (Pasien Budi Santoso):
+
+**1. Kondisi Stok Sebelum Dispense:**
+- `OBT-001` (Paracetamol 500 mg Tablet): **100 Tablet**
+- `OBT-002` (Amoxicillin 500 mg Kapsul): **50 Kapsul**
+
+**2. Eksekusi Dispensing Resep:**
+- Permintaan: 10 tablet Paracetamol & 15 kapsul Amoxicillin.
+
+**3. Kondisi Stok Sesudah Dispense:**
+- `OBT-001` (Paracetamol 500 mg Tablet): **90 Tablet** (-10 Tablet, Akurat)
+- `OBT-002` (Amoxicillin 500 mg Kapsul): **35 Kapsul** (-15 Kapsul, Akurat)
+
+**4. Log Kartu Stok (Audit Trail):**
 ```json
 {
-  "status": "success",
-  "data_inventori": [
-    {
-      "id_obat": "OBT-001",
-      "nama_obat": "Paracetamol 500 mg Tablet",
-      "satuan": "Tablet",
-      "stok": 100,
-      "lokasi_rak": "RAK-A-01"
-    },
-    {
-      "id_obat": "OBT-002",
-      "nama_obat": "Amoxicillin 500 mg Kapsul",
-      "satuan": "Kapsul",
-      "stok": 50,
-      "lokasi_rak": "RAK-B-03"
-    }
-  ]
-}
-```
-
-### 2. Eksekusi Dispense Resep (Pemotongan Otomatis)
-- **ID Resep**: `RSP-20260912-001`
-- **Obat Keluar**:
-  - `OBT-001` (Paracetamol 500 mg Tablet): **10 Tablet**
-  - `OBT-002` (Amoxicillin 500 mg Kapsul): **15 Kapsul**
-
-### 3. Kondisi Stok Sesudah Resep Didispense
-```json
-{
-  "status": "success",
-  "data_inventori": [
-    {
-      "id_obat": "OBT-001",
-      "nama_obat": "Paracetamol 500 mg Tablet",
-      "satuan": "Tablet",
-      "stok": 90,
-      "keterangan": "Terpotong 10 tablet (Akurat)"
-    },
-    {
-      "id_obat": "OBT-002",
-      "nama_obat": "Amoxicillin 500 mg Kapsul",
-      "satuan": "Kapsul",
-      "stok": 35,
-      "keterangan": "Terpotong 15 kapsul (Akurat)"
-    }
-  ]
-}
-```
-
-### 4. Bukti Log Kartu Stok (Audit Trail Database)
-```json
-{
-  "id_mutasi": "MUT-20260912094432-001",
+  "id_mutasi": "MUT-20260912101910-001",
   "id_obat": "OBT-001",
   "nama_obat": "Paracetamol 500 mg Tablet",
-  "waktu": "2026-09-12T02:44:32Z",
   "jenis_mutasi": "KELUAR_DISPENSING",
   "jumlah": 10,
   "stok_awal": 100,
@@ -109,63 +82,26 @@ Berikut adalah rekam data pemotongan kuantitas stok inventori pada saat resep `R
 
 ---
 
-## 🛡️ Bukti Negative Stock Protection & Concurrency Test
-
-### 1. Bukti Proteksi Stok Kosong / Tidak Cukup
-Ketika resep `RSP-20260912-003` meminta **20 Sachet Oralit**, sedangkan stok inventori hanya tersisa **5 Sachet**:
-```json
-// Status: 422 Unprocessable Entity
-{
-  "status": "error",
-  "error_type": "NEGATIVE_STOCK_PROTECTION",
-  "message": "Dispensing dibatalkan! Stok obat tidak mencukupi, sistem mencegah mutasi stok negatif.",
-  "detail_defisit": [
-    {
-      "id_obat": "OBT-004",
-      "nama_obat": "Oralit Serbuk Sachet",
-      "stok_tersedia": 5,
-      "stok_diminta": 20,
-      "defisit": 15,
-      "alasan": "Kuantitas stok tidak mencukupi (Negative Stock Protection terpicu)."
-    }
-  ]
-}
-```
-*Hasil Verifikasi*: Stok fisik Oralit di database tetap **5 Sachet** (tidak mengalami mutasi minus).
-
-### 2. Bukti Pencegahan Race Condition (Concurrency Multi-Threading)
-- Stok Salbutamol (OBT-005): **10 Tablet**.
-- 5 Thread melakukan request dispense serentak secara bersamaan (@ 4 Tablet = total kebutuhan 20 Tablet).
-- **Hasil**:
-  - Thread yang berhasil: 2 request (8 Tablet terpotong).
-  - Thread yang ditolak: 3 request (mencegah over-dispense).
-  - Sisa Stok Akhir: **Tepat 2 Tablet** (Tidak minus & tidak terjadi data race).
+### Isi File di Repo
+- `Postman_Collection_Farmasi_Puskesmas.json` : Export collection Postman v2.1.0 lengkap dengan assertion otomatis.
+- `server.py` : Server REST API Python untuk modul Farmasi Puskesmas.
+- `test_runner.py` : Script Python pengujian otomatis via terminal.
+- `README.md` : Dokumentasi laporan hasil pengujian dan bukti mutasi stok.
 
 ---
 
-## 📁 Struktur Berkas Proyek
+### Cara Menjalankan
 
-```
-pengujian-farmasi-puskesmas/
-│── server.py                               # Mock API Server REST Farmasi & Concurrency Lock
-│── test_runner.py                          # Automated Test Suite (10 Test Cases)
-│── Postman_Collection_Farmasi_Puskesmas.json # Export Postman v2.1.0 lengkap dengan assertion
-│── README.md                               # Laporan & Bukti Hasil Pengujian
-└── DOKUMENTASI_PENGUJIAN_FARMASI.md        # Spesifikasi Lengkap Endpoint API Farmasi
+1. Jalankan API Server:
+```bash
+python server.py
 ```
 
-## 🚀 Cara Menjalankan
+2. Jalankan Pengujian Otomatis:
+```bash
+python test_runner.py
+```
 
-1. **Jalankan API Server**:
-   ```bash
-   python server.py
-   ```
-2. **Jalankan Pengujian Otomatis**:
-   ```bash
-   python test_runner.py
-   ```
-3. **Import ke Postman**:
-   - Buka Postman -> Klik **Import** -> Pilih file `Postman_Collection_Farmasi_Puskesmas.json`.
-   - Jalankan via **Collection Runner** atau jalankan request satu per satu.
-# Uji-Farmasi-Resep-Elektronik-Logistik-Obat
-
+3. Jalankan via Postman:
+- Import `Postman_Collection_Farmasi_Puskesmas.json` ke Postman.
+- Pastikan menggunakan **Desktop Agent**, lalu jalankan via Collection Runner.
