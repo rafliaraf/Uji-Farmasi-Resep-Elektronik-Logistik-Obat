@@ -1,0 +1,414 @@
+{
+	"info": {
+		"_postman_id": "8b9a2c34-farmasi-puskesmas-v21",
+		"name": "SIMPUS - Pengujian Modul Farmasi & E-Resep Puskesmas",
+		"description": "Koleksi API Postman untuk Pengujian Modul Farmasi Puskesmas: Penerimaan E-Resep, Telaah Resep Apoteker, Dispensing Obat, Pemotongan Mutasi Stok Real-Time, Negative Stock Protection, dan Pencegahan Race Condition.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8080",
+			"type": "string"
+		},
+		{
+			"key": "resep_id",
+			"value": "RSP-20260912-001",
+			"type": "string"
+		},
+		{
+			"key": "resep_stok_kurang_id",
+			"value": "RSP-20260912-003",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "00. Health Check & Reset",
+			"item": [
+				{
+					"name": "Health Check Service Farmasi",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Service status is UP\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.status).to.eql(\"UP\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Reset State Database Farmasi (Bantu Pengujian)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"url": {
+							"raw": "{{base_url}}/resep/reset",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "reset"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Reset berhasil (200 OK)\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "01. Penerimaan Resep Masuk",
+			"item": [
+				{
+					"name": "GET Daftar Resep Menunggu (status=menunggu)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/resep?status=menunggu",
+							"host": ["{{base_url}}"],
+							"path": ["resep"],
+							"query": [
+								{"key": "status", "value": "menunggu"}
+							]
+						},
+						"description": "Menampilkan daftar resep elektronik yang dikirim oleh dokter dari poli periksa dan menunggu penelaahan apoteker."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Data resep berstatus menunggu tersedia\", function () {",
+									"    var res = pm.response.json();",
+									"    pm.expect(res.status).to.eql(\"success\");",
+									"    pm.expect(res.data.length).to.be.above(0);",
+									"    pm.expect(res.data[0].status).to.eql(\"menunggu\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "GET Detail E-Resep by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/resep/{{resep_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "{{resep_id}}"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Detail resep dan item obat valid\", function () {",
+									"    var res = pm.response.json();",
+									"    pm.expect(res.data.id_resep).to.eql(pm.variables.get(\"resep_id\"));",
+									"    pm.expect(res.data.items).to.be.an(\"array\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "02. Telaah & Verifikasi Resep Apoteker",
+			"item": [
+				{
+					"name": "POST Telaah Resep - Disetujui (Lolos Klinis & Administratif)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apoteker\": \"Apt. Muhammad Fauzan, S.Farm.\",\n  \"keputusan\": \"DISETUJUI\",\n  \"telaah_administratif\": {\n    \"keabsahan_resep\": true,\n    \"kejelasan_tulisan_signa\": true,\n    \"identitas_pasien_sesuai\": true\n  },\n  \"telaah_farmasetis\": {\n    \"bentuk_sediaan_tepat\": true,\n    \"dosis_dan_aturan_pakai_tepat\": true,\n    \"stabilitas_obat_terjamin\": true\n  },\n  \"telaah_klinis\": {\n    \"ketepatan_indikasi\": true,\n    \"tidak_ada_duplikasi\": true,\n    \"bebas_interaksi_obat_fatal\": true\n  },\n  \"catatan\": \"Kesesuaian dosis anak/dewasa dan ketersediaan obat diverifikasi aman. Siap dispense.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/resep/{{resep_id}}/telaah",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "{{resep_id}}", "telaah"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Status resep berubah menjadi siap_dispense\", function () {",
+									"    var res = pm.response.json();",
+									"    pm.expect(res.status_resep).to.eql(\"siap_dispense\");",
+									"    pm.expect(res.data.telaah_apoteker.keputusan).to.eql(\"DISETUJUI\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "POST Telaah Resep - Peringatan Alergi Obat (422 Intersepsi)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apoteker\": \"Apt. Nurul Hidayah, S.Farm.\",\n  \"keputusan\": \"DISETUJUI\",\n  \"catatan\": \"Uji telaah lolos pada pasien dengan riwayat alergi obat aktif\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/resep/RSP-20260912-002/telaah",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "RSP-20260912-002", "telaah"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 atau 422 Kontraindikasi Alergi\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 422]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "03. Dispensing & Pemotongan Stok Inventori",
+			"item": [
+				{
+					"name": "GET Cek Stok Sebelum Dispensing (OBT-001)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/obat/OBT-001/kartu-stok",
+							"host": ["{{base_url}}"],
+							"path": ["obat", "OBT-001", "kartu-stok"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"var res = pm.response.json();",
+									"pm.collectionVariables.set(\"stok_sebelum_obt001\", res.stok_saat_ini);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "POST Eksekusi Dispensing (Pemotongan Stok Real-Time)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"petugas_dispense\": \"Apt. Muhammad Fauzan, S.Farm.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/resep/{{resep_id}}/dispense",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "{{resep_id}}", "dispense"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK (Dispense Sukses)\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Status resep menjadi selesai & stok snapshot ada\", function () {",
+									"    var res = pm.response.json();",
+									"    pm.expect(res.status_resep).to.eql(\"selesai\");",
+									"    pm.expect(res.kondisi_stok.sebelum_dispense).to.exist;",
+									"    pm.expect(res.kondisi_stok.sesudah_dispense).to.exist;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "GET Cek Stok Sesudah Dispensing & Mutasi (OBT-001)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/obat/OBT-001/kartu-stok",
+							"host": ["{{base_url}}"],
+							"path": ["obat", "OBT-001", "kartu-stok"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"var res = pm.response.json();",
+									"pm.test(\"Stok inventori obat OBT-001 valid\", function () {",
+									"    pm.expect(res.stok_saat_ini).to.be.a(\"number\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "04. Proteksi Negative Stock & Keamanan",
+			"item": [
+				{
+					"name": "POST Dispense Resep Stok Tidak Cukup (Negative Stock Protection)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"pm.sendRequest({",
+									"    url: pm.variables.get(\"base_url\") + \"/resep/\" + pm.variables.get(\"resep_stok_kurang_id\") + \"/telaah\",",
+									"    method: 'POST',",
+									"    header: {'Content-Type': 'application/json'},",
+									"    body: {mode: 'raw', raw: JSON.stringify({apoteker: 'Apoteker', keputusan: 'DISETUJUI'})}",
+									"}, function (err, res) {});"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Ditolak dengan kode 422 Unprocessable Entity\", function () {",
+									"    pm.response.to.have.status(422);",
+									"});",
+									"pm.test(\"Error type pencegahan valid (Negative Stock atau Unverified)\", function () {",
+									"    var res = pm.response.json();",
+									"    pm.expect(res.error_type).to.be.oneOf([\"NEGATIVE_STOCK_PROTECTION\", \"UNVERIFIED_PRESCRIPTION\"]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"petugas_dispense\": \"Petugas Farmasi\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/resep/{{resep_stok_kurang_id}}/dispense",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "{{resep_stok_kurang_id}}", "dispense"]
+						},
+						"description": "Menguji pencegahan mutasi stok negatif ketika kuantitas obat yang diminta (20 sachet Oralit) melebihi stok yang ada (5 sachet)."
+					}
+				},
+				{
+					"name": "POST Double Dispensing Protection (409 Conflict)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"petugas_dispense\": \"Petugas Curang / Duplikasi\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/resep/{{resep_id}}/dispense",
+							"host": ["{{base_url}}"],
+							"path": ["resep", "{{resep_id}}", "dispense"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Ditolak dengan kode 409 Conflict (Mencegah double dispense)\", function () {",
+									"    pm.response.to.have.status(409);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				}
+			]
+		}
+	]
+}
