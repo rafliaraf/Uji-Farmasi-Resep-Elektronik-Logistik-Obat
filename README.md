@@ -57,27 +57,43 @@ Pengujian pada resep `RSP-20260912-001` (Pasien Budi Santoso):
 - `OBT-001` (Paracetamol 500 mg Tablet): **100 Tablet**
 - `OBT-002` (Amoxicillin 500 mg Kapsul): **50 Kapsul**
 
-**2. Eksekusi Dispensing Resep:**
+**2. Eksekusi Dispensing Resep (`RSP-20260912-001`):**
 - Permintaan: 10 tablet Paracetamol & 15 kapsul Amoxicillin.
 
 **3. Kondisi Stok Sesudah Dispense:**
 - `OBT-001` (Paracetamol 500 mg Tablet): **90 Tablet** (-10 Tablet, Akurat)
 - `OBT-002` (Amoxicillin 500 mg Kapsul): **35 Kapsul** (-15 Kapsul, Akurat)
 
-**4. Log Kartu Stok (Audit Trail):**
-```json
-{
-  "id_mutasi": "MUT-20260912101910-001",
-  "id_obat": "OBT-001",
-  "nama_obat": "Paracetamol 500 mg Tablet",
-  "jenis_mutasi": "KELUAR_DISPENSING",
-  "jumlah": 10,
-  "stok_awal": 100,
-  "stok_akhir": 90,
-  "referensi": "E-RSP/2026/09/001",
-  "petugas": "Apt. Muhammad Fauzan, S.Farm.",
-  "keterangan": "Pengeluaran obat pasien Budi Santoso (No RM: RM-2026-00451)"
-}
+**4. Log Database Mutasi Stok (Tabel `inventori_obat`):**
+```sql
+-- Kondisi Sebelum Dispense
+SELECT id_obat, nama_obat, stok FROM inventori_obat WHERE id_obat IN ('OBT-001', 'OBT-002');
++---------+----------------------------+------+
+| id_obat | nama_obat                  | stok |
++---------+----------------------------+------+
+| OBT-001 | Paracetamol 500 mg Tablet  |  100 |
+| OBT-002 | Amoxicillin 500 mg Kapsul  |   50 |
++---------+----------------------------+------+
+
+-- Kondisi Sesudah Dispense (Terpotong Otomatis Real-Time)
+SELECT id_obat, nama_obat, stok FROM inventori_obat WHERE id_obat IN ('OBT-001', 'OBT-002');
++---------+----------------------------+------+
+| id_obat | nama_obat                  | stok |
++---------+----------------------------+------+
+| OBT-001 | Paracetamol 500 mg Tablet  |   90 | -- (-10 Tablet)
+| OBT-002 | Amoxicillin 500 mg Kapsul  |   35 | -- (-15 Kapsul)
++---------+----------------------------+------+
+```
+
+**5. Log Database Kartu Stok (Tabel `kartu_stok_log` - Audit Trail):**
+```sql
+SELECT id_mutasi, id_obat, jenis_mutasi, jumlah, stok_awal, stok_akhir, referensi, petugas FROM kartu_stok_log WHERE referensi = 'E-RSP/2026/09/001';
++-----------------------+---------+-------------------+--------+-----------+------------+--------------------+-----------------------------+
+| id_mutasi             | id_obat | jenis_mutasi      | jumlah | stok_awal | stok_akhir | referensi          | petugas                     |
++-----------------------+---------+-------------------+--------+-----------+------------+--------------------+-----------------------------+
+| MUT-20260912101910-01 | OBT-001 | KELUAR_DISPENSING |     10 |       100 |         90 | E-RSP/2026/09/001  | Apt. Muhammad Fauzan, S.Farm|
+| MUT-20260912101910-02 | OBT-002 | KELUAR_DISPENSING |     15 |        50 |         35 | E-RSP/2026/09/001  | Apt. Muhammad Fauzan, S.Farm|
++-----------------------+---------+-------------------+--------+-----------+------------+--------------------+-----------------------------+
 ```
 
 ---
