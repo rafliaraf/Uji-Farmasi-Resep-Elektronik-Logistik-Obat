@@ -3,6 +3,7 @@
 Repo ini isinya hasil pengerjaan tugas pengujian endpoint penerimaan e-resep, telaah klinis apoteker, penyiapan obat (dispensing), dan pemotongan otomatis stok inventori di instalasi farmasi Puskesmas secara real-time dan bebas dari race condition.
 
 - **Nama**: Muhammad Rafli Aolia
+- **LinkedIn**: [muhammadrafliaoliaa](https://www.linkedin.com/in/muhammadrafliaoliaa/)
 - **Tugas**: Verifikasi alur peresepan obat elektronik dan sinkronisasi mutasi stok Puskesmas
 - **Hasil**: Semua skenario pengujian lulus (100% Passed)
 
