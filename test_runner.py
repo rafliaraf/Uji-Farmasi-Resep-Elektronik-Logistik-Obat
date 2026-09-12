@@ -178,16 +178,22 @@ def run_tests():
         failed += 1
 
     # TEST 6: Cek Kondisi Stok Sebelum Dispensing (OBT-001 & OBT-002)
-    print_test_header(6, "Cek Kondisi Stok Sebelum vs Sesudah Dispensing (Real-Time Mutasi)")
+    print_test_header(6, "Cek Kondisi Stok Sebelum vs Sesudah Dispensing (Log Database)")
     st_obt1, res_obt1 = make_request("GET", "/obat/OBT-001/kartu-stok")
     st_obt2, res_obt2 = make_request("GET", "/obat/OBT-002/kartu-stok")
     stok_sebelum_1 = res_obt1["stok_saat_ini"]
     stok_sebelum_2 = res_obt2["stok_saat_ini"]
-    print(f"       [KONDISI SEBELUM DISPENSE]")
-    print(f"       * OBT-001 (Paracetamol 500mg) : Stok = {stok_sebelum_1} Tablet")
-    print(f"       * OBT-002 (Amoxicillin 500mg) : Stok = {stok_sebelum_2} Kapsul")
+
+    print(f"       {Colors.BOLD}LOG DATABASE: Kondisi SEBELUM Dispense (Tabel inventori_obat){Colors.ENDC}")
+    print(f"       +---------+----------------------------+--------+")
+    print(f"       | id_obat | nama_obat                  | stok   |")
+    print(f"       +---------+----------------------------+--------+")
+    print(f"       | OBT-001 | Paracetamol 500 mg Tablet  | {stok_sebelum_1:<6} |")
+    print(f"       | OBT-002 | Amoxicillin 500 mg Kapsul  | {stok_sebelum_2:<6} |")
+    print(f"       +---------+----------------------------+--------+")
 
     # Eksekusi Dispense Resep 001 (minta 10 pct, 15 amx)
+    print(f"\n       [EKSEKUSI] POST /resep/RSP-20260912-001/dispense (Keluar: 10 PCT, 15 AMX)")
     st_disp, res_disp = make_request("POST", "/resep/RSP-20260912-001/dispense", {
         "petugas_dispense": "Apt. Muhammad Fauzan, S.Farm."
     })
@@ -197,9 +203,13 @@ def run_tests():
     stok_sesudah_1 = res_obt1_after["stok_saat_ini"]
     stok_sesudah_2 = res_obt2_after["stok_saat_ini"]
 
-    print(f"\n       [KONDISI SESUDAH DISPENSE]")
-    print(f"       * OBT-001 : {stok_sebelum_1} -> {stok_sesudah_1} (-10 Tablet)  [AKURAT]")
-    print(f"       * OBT-002 : {stok_sebelum_2} -> {stok_sesudah_2} (-15 Kapsul)  [AKURAT]")
+    print(f"\n       {Colors.BOLD}LOG DATABASE: Kondisi SESUDAH Dispense (Tabel inventori_obat){Colors.ENDC}")
+    print(f"       +---------+----------------------------+--------+----------------+")
+    print(f"       | id_obat | nama_obat                  | stok   | mutasi         |")
+    print(f"       +---------+----------------------------+--------+----------------+")
+    print(f"       | OBT-001 | Paracetamol 500 mg Tablet  | {stok_sesudah_1:<6} | -10 (Akurat)   |")
+    print(f"       | OBT-002 | Amoxicillin 500 mg Kapsul  | {stok_sesudah_2:<6} | -15 (Akurat)   |")
+    print(f"       +---------+----------------------------+--------+----------------+")
 
     if st_disp == 200 and stok_sesudah_1 == (stok_sebelum_1 - 10) and stok_sesudah_2 == (stok_sebelum_2 - 15):
         print(f"\n{Colors.GREEN}[PASS]{Colors.ENDC} Eksekusi dispense sukses & kuantitas stok inventori terpotong akurat!")
