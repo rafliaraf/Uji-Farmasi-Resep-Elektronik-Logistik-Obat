@@ -120,4 +120,4 @@ python test_runner.py
 
 3. Jalankan via Postman:
 - Import `Postman_Collection_Farmasi_Puskesmas.json` ke Postman.
-- Pastikan menggunakan **Desktop Agent**, lalu jalankan via Collection Runner.
+- menggunakan **Desktop Agent**, lalu jalankan via Collection Runner.
